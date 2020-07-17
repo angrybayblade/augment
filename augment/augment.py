@@ -21,9 +21,9 @@ class RandomZoom(object):
         self.resize = resize
 
     def __call__(self,img:np.ndarray,box:pd.DataFrame,center_zoom:bool=False,resize:bool=False):
-        r = np.random.randint(lower,upper)
+        r = np.random.randint(self.lower,self.upper)
         r += r%2
-        pad = int((img_size - r) / 2)
+        pad = int((self.img_size - r) / 2)
 
         c_x_adj = np.random.randint(-pad,pad)
         c_y_adj = np.random.randint(-pad,pad)
@@ -32,8 +32,8 @@ class RandomZoom(object):
             c_x_adj = 0
             c_y_adj = 0
 
-        c_x = lower + c_x_adj
-        c_y = lower + c_y_adj
+        c_x = self.lower + c_x_adj
+        c_y = self.lower + c_y_adj
         c_xmin = c_x - (r//2)
         c_xmax = c_x + (r//2)
         c_ymin = c_y - (r//2)
@@ -67,7 +67,8 @@ class RandomZoom(object):
         
         return img_,box_[['xmin','ymin','xmax','ymax']]
 
-class RandomBrightness(object):
+
+class RandomHsv(object):
     """
     RandomBrightness
     
@@ -77,28 +78,23 @@ class RandomBrightness(object):
     def __init__(self,img_size:int=1024,resize:int=0):
         self.img_size = img_size
         self.resize = resize
-        self.choices = [
-            [ 1.3, 1.4, 1.5 ,1.6 ],#0-20
-            [ 0.7, 0.8, 1.3, 1.4 ],#21-40
-            [ 0.5, 0.6, 0.7, 0.8 ],#41-60
-            [ 0.4, 0.5, 0.6, 0.7 ],#61-80
-            [ 0.3, 0.4, 0.5, 0.6 ],#81-100
-        ]
-            
-    def get_alpha(self,brightness):
-        return np.random.choice(self.choices[int(brightness//0.209)])
+        self.choices_0 = list(np.arange(-30,-18)) + list(np.arange(12,24))            
         
     def __call__(self,img:np.ndarray,boxes:pd.DataFrame,resize:int=0):
-        brightness = np.minimum(cv2.cvtColor(img.copy(),cv2.COLOR_RGB2HSV),255)[:,:,2].mean()/255
-        alpha = self.get_alpha(brightness)
+        
+        img = cv2.cvtColor(img.copy(),cv2.COLOR_RGB2HSV).astype(np.int)
+        img[:,:,2] = img[:,:,2] + np.random.choice(self.choices_0)
+        img = np.maximum(np.minimum(img,255),0).astype(np.uint8)
+        img = cv2.cvtColor(img,cv2.COLOR_HSV2RGB)
         
         if self.resize or resize:
             size = self.resize if self.resize else resize
             img = cv2.resize(img,(size,size),interpolation=cv2.INTER_CUBIC)
             boxes = boxes * (size/self.img_size)
-            return np.minimum(img.copy()*alpha,255).astype(np.uint8),boxes[['xmin','ymin','xmax','ymax']] 
+            return img,boxes[['xmin','ymin','xmax','ymax']] 
         
-        return np.minimum(img.copy()*alpha,255).astype(np.uint8),boxes
+        return img,boxes
+
 
 class RandomRotate(object):
     """
@@ -150,9 +146,9 @@ class RandomRotate(object):
         return xmin, ymin, xmax, ymax
 
     def __call__(self,img:np.ndarray,box:pd.DataFrame,resize:int=0):
-        box_ = box[['xmin', 'ymin', 'xmax', 'ymax']].copy() / img_size
-        self.angle = np.random.choice(self.angles)        
-        box_[['xmin', 'ymin', 'xmax', 'ymax']] = (np.maximum(np.apply_along_axis(self.get_new_box,axis=1,arr=box_),0)*img_size).astype(int)
+        box_ = box[['xmin', 'ymin', 'xmax', 'ymax']].copy() / self.img_size
+        self.angle = np.random.choice(self.angles)
+        box_[['xmin', 'ymin', 'xmax', 'ymax']] = (np.maximum(np.apply_along_axis(self.get_new_box,axis=1,arr=box_),0)*self.img_size).astype(int)
         img_ = ndimage.rotate(img.copy(),self.angle,reshape=False)
         
         if self.resize or resize:
@@ -162,4 +158,3 @@ class RandomRotate(object):
             return img_.astype(np.uint8),box_[['xmin','ymin','xmax','ymax']]
         
         return img_,box_[['xmin', 'ymin', 'xmax', 'ymax']]
-
